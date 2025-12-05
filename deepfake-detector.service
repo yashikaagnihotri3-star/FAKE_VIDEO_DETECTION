@@ -1,0 +1,23 @@
+# systemd service to auto-start docker-compose on reboot
+# Place this file at: /etc/systemd/system/deepfake-detector.service
+
+[Unit]
+Description=Deepfake Detector Site
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/deepfake-detector
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+
+# Then enable and start:
+# sudo systemctl enable deepfake-detector.service
+# sudo systemctl start deepfake-detector.service

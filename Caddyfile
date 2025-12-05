@@ -1,0 +1,26 @@
+# Caddyfile - Automatic HTTPS with Caddy
+# Replace example.com with your actual domain
+
+example.com {
+    # Serve static files (index.html)
+    root * /usr/share/nginx/html
+    file_server
+
+    # API proxy to backend
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy backend:8000
+    }
+
+    # Serve index.html for all other routes (SPA fallback)
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Log requests
+    log {
+        output stdout
+        format json
+    }
+}

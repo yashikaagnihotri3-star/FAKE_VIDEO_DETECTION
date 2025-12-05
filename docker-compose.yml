@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: deepfake-backend
+    restart: unless-stopped
+    environment:
+      - DETECTOR_MODE=mock
+      - PYTHONIOENCODING=utf-8
+    volumes:
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+      - ./queue:/app/queue
+      - ./logs:/app/logs
+      - ./index.html:/app/index.html:ro
+    networks:
+      - deepfake-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  caddy:
+    image: caddy:latest
+    container_name: deepfake-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - deepfake-net
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - CADDY_ADMIN=127.0.0.1:2019
+
+networks:
+  deepfake-net:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:
