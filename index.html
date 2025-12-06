@@ -539,9 +539,9 @@
 
     <script>
         // Configuration
-        // Use relative API base so the frontend and backend can be served from the same origin.
-        // When deployed to your domain, leave this as an empty string so requests go to the same host.
-        const API_URL = "";
+        // Point to your backend. For local testing, use http://localhost:8000
+        // For production, use your backend domain (or "" for same-origin proxy)
+        const API_URL = "http://localhost:8000";
         let selectedFiles = [];
         let analysisResults = [];
 
