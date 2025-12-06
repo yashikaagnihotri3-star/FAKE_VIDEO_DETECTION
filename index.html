@@ -397,6 +397,62 @@
             background: #cfe2ff;
             color: #084298;
         }
+        /* Login / Auth styles */
+        .auth-button {
+            position: absolute;
+            right: 28px;
+            top: 28px;
+            background: rgba(255,255,255,0.08);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            backdrop-filter: blur(4px);
+        }
+
+        .auth-button:hover { transform: translateY(-2px); }
+
+        .auth-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+
+        .login-card {
+            width: 420px;
+            max-width: calc(100% - 40px);
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), #ffffff);
+            border-radius: 14px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+            padding: 28px;
+            color: #222;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .login-card h3 { margin-bottom: 6px; color: #333; }
+        .login-card p.lead { color: #666; margin-bottom: 18px; }
+
+        .input-row { margin-bottom: 12px; }
+        .input-row input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid #e6e6e6;
+            font-size: 0.95em;
+        }
+
+        .login-actions { display:flex; gap:10px; margin-top:14px; }
+        .btn-login { background: #667eea; color: white; border-radius:8px; padding:10px 14px; border:none; cursor:pointer; font-weight:700; flex:1 }
+        .btn-ghost { background: transparent; border:1px solid #ddd; padding:10px 12px; border-radius:8px; cursor:pointer; flex:1 }
+
+        .login-footer { margin-top:12px; color:#888; font-size:0.9em; text-align:center }
     </style>
 </head>
 <body>
@@ -406,6 +462,8 @@
             <h1>🎬 Deepfake Detector</h1>
             <p>Upload videos to detect deepfakes with AI-powered analysis</p>
         </div>
+
+        <button id="authBtn" class="auth-button">Login</button>
 
         <!-- Connection Status -->
         <div id="connectionStatus" class="connection-status status-loading">
@@ -581,6 +639,11 @@
         document.getElementById("detectBtn").addEventListener("click", analyzeVideos);
 
         async function analyzeVideos() {
+            // Require user to be logged in (client-side) before starting analysis
+            if (!isAuthenticated()) {
+                showLogin();
+                return;
+            }
             if (selectedFiles.length === 0) {
                 alert("Please select at least one video file");
                 return;
@@ -614,7 +677,42 @@
             }
         }
 
+        // If API_URL is empty (served from GitHub Pages), use a client-side mock analyzer
+        function randomBetween(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function mockAnalyze(file) {
+            return new Promise((resolve) => {
+                // simulate upload/processing time
+                const delay = Math.floor(randomBetween(700, 1600));
+                setTimeout(() => {
+                    const score = parseFloat((Math.random()).toFixed(3));
+                    const confidence = parseFloat(randomBetween(0.6, 0.98).toFixed(3));
+                    const is_deepfake = score > 0.6;
+                    resolve({
+                        status: "success",
+                        filename: file.name || 'unknown',
+                        deepfake_score: score,
+                        is_deepfake: is_deepfake,
+                        confidence: confidence,
+                        request_id: `mock_${Date.now()}`,
+                        timestamp: new Date().toISOString()
+                    });
+                }, delay);
+            });
+        }
+
         async function detectSingleVideo(formData) {
+            // If no API_URL is configured, run a local mock analysis so the UI works on Pages
+            if (!API_URL) {
+                const file = selectedFiles[0];
+                const result = await mockAnalyze(file);
+                analysisResults.push(result);
+                renderResults();
+                return result;
+            }
+
             const response = await fetch(`${API_URL}/api/detect`, {
                 method: "POST",
                 body: formData
@@ -628,9 +726,20 @@
             const result = await response.json();
             analysisResults.push(result);
             renderResults();
+            return result;
         }
 
         async function detectBatch(formData) {
+            if (!API_URL) {
+                // run mock analyze for each selected file sequentially
+                for (let file of selectedFiles) {
+                    const res = await mockAnalyze(file);
+                    analysisResults.push(res);
+                    renderResults();
+                }
+                return { results: analysisResults };
+            }
+
             const response = await fetch(`${API_URL}/api/batch-detect`, {
                 method: "POST",
                 body: formData
@@ -644,6 +753,7 @@
             const batchResult = await response.json();
             analysisResults.push(...batchResult.results);
             renderResults();
+            return batchResult;
         }
 
         function renderResults() {
@@ -723,6 +833,36 @@
 
                 resultsDiv.appendChild(resultEl);
             });
+
+                        <!-- Login Modal (hidden by default) -->
+                        <div id="authModal" class="auth-modal-backdrop" style="display:none">
+                            <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+                                <h3 id="loginTitle">Welcome back</h3>
+                                <p class="lead">Sign in to analyze videos and view results securely.</p>
+
+                                <div class="input-row">
+                                    <label for="loginEmail" style="display:block; margin-bottom:6px; color:#444; font-weight:600">Email</label>
+                                    <input id="loginEmail" type="email" placeholder="you@company.com" autocomplete="username">
+                                </div>
+
+                                <div class="input-row">
+                                    <label for="loginPassword" style="display:block; margin-bottom:6px; color:#444; font-weight:600">Password</label>
+                                    <input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password">
+                                </div>
+
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:12px">
+                                    <label style="display:flex; align-items:center; gap:8px; font-size:0.9em; color:#666"><input id="rememberMe" type="checkbox"> Remember me</label>
+                                    <a href="#" id="forgotLink" style="font-size:0.9em; color:#667eea; text-decoration:none">Forgot?</a>
+                                </div>
+
+                                <div class="login-actions">
+                                    <button id="loginSubmit" class="btn-login">Sign in</button>
+                                    <button id="loginCancel" class="btn-ghost">Cancel</button>
+                                </div>
+
+                                <div class="login-footer">Or continue in demo mode — no account required</div>
+                            </div>
+                        </div>
         }
 
         function updateStats() {
@@ -763,6 +903,70 @@
         // Check connection on load
         checkConnection();
         setInterval(checkConnection, 5000); // Check every 5 seconds
+    </script>
+    <script>
+        // Simple client-side auth for demo purposes (mock only)
+        function isAuthenticated() {
+            return !!localStorage.getItem('dfa_user');
+        }
+
+        function showLogin() {
+            document.getElementById('authModal').style.display = 'flex';
+            document.getElementById('loginEmail').focus();
+        }
+
+        function hideLogin() {
+            document.getElementById('authModal').style.display = 'none';
+        }
+
+        function updateAuthUI() {
+            const btn = document.getElementById('authBtn');
+            if (isAuthenticated()) {
+                const user = JSON.parse(localStorage.getItem('dfa_user') || '{}');
+                btn.textContent = `Logout (${user.email || 'user'})`;
+            } else {
+                btn.textContent = 'Login';
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const pass = document.getElementById('loginPassword').value;
+            if (!email || !pass) {
+                alert('Please provide email and password (demo)');
+                return;
+            }
+            // Mock authentication: accept any credential in demo
+            const user = { email };
+            localStorage.setItem('dfa_user', JSON.stringify(user));
+            hideLogin();
+            updateAuthUI();
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('dfa_user');
+            updateAuthUI();
+        }
+
+        // Attach auth controls
+        document.getElementById('authBtn').addEventListener('click', () => {
+            if (isAuthenticated()) {
+                handleLogout();
+                return;
+            }
+            showLogin();
+        });
+
+        document.getElementById('loginCancel').addEventListener('click', (e) => { e.preventDefault(); hideLogin(); });
+        document.getElementById('loginSubmit').addEventListener('click', (e) => { e.preventDefault(); handleLogin(); });
+
+        // Demo: allow pressing Enter to submit in modal
+        document.getElementById('authModal').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { handleLogin(); }
+        });
+
+        // Initialize
+        updateAuthUI();
     </script>
 </body>
 </html>
